@@ -10,6 +10,7 @@ const inputDuration = document.querySelector('.form__input--duration');
 const inputCadence = document.querySelector('.form__input--cadence');
 const inputElevation = document.querySelector('.form__input--elevation');
 const list = document.querySelector('.list');
+const resetButton = document.querySelector('.reset');
 
 
 
@@ -21,7 +22,7 @@ class Workout {
 
     clicks = 0;
 
-    constructor(coords, distance, duration,type) {
+    constructor(coords, distance, duration, type) {
         this.coords = coords;
         this.distance = distance;
         this.duration = duration;
@@ -31,7 +32,7 @@ class Workout {
 
 
     _setDescription() {
-//         prettier-ignore
+        //         prettier-ignore
         const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
         this.description = `${this.type[0].toUpperCase()}${this.type.slice(1)} on ${
@@ -68,7 +69,7 @@ class Cycling extends Workout {
         super(coords, distance, duration, type);
         this.elevationGain = elevationGain;
         this.calcSpeed();
-    
+
     }
     calcSpeed() {
         this.speed = this.duration / (this.distance / 60);
@@ -76,9 +77,6 @@ class Cycling extends Workout {
     }
 }
 
-
-//const cycling = new Cycling();
-//console.log(cycling);
 
 
 
@@ -102,15 +100,16 @@ class App {
         form.addEventListener('submit', this._newWorkout.bind(this));
         inputType.addEventListener('change', this._toggleElevationField);
         containerWorkouts.addEventListener('click', this._moveToPopup.bind(this));
+        resetButton.addEventListener('click', this._reset.bind(this));
 
     }
 
-    
+
 
     //As name suggests, this._loadmap.bind(this) is binding the _getPosition() method to _loadmap function.
     _getPosition() {
         if (navigator.geolocation) {
-            
+
             //Using the geolocation API
             navigator.geolocation.getCurrentPosition(this._loadMap.bind(this), function () {
                 alert("Please allow location access for the site.");
@@ -121,16 +120,16 @@ class App {
 
 
     _loadMap(position) {
-        
+
         list.classList.remove('hidden');
-        
+
         const {
             latitude,
             longitude,
             accuracy,
             speed
         } = position.coords;
-        
+
 
 
         //Leaflet - Third Party Library
@@ -145,13 +144,17 @@ class App {
         }).addTo(this.#map);
 
         L.marker([latitude, longitude]).addTo(this.#map)
-            .bindPopup('First default render. Device home location.', {
+            .bindPopup('Your current location.', {
                 autoClose: true,
                 closeOnClick: false
             })
             .openPopup();
 
         this.#map.on('click', this._showForm.bind(this));
+
+        this.#workouts.forEach(work => {
+            this._renderWorkoutMarker(work);
+        });
 
 
     }
@@ -177,7 +180,7 @@ class App {
 
 
     _hideForm() {
-        
+
         inputCadence.value = inputDistance.value = inputDuration.value = inputElevation.value = '';
         form.style.display = 'none';
         form.classList.add('hidden');
@@ -192,8 +195,8 @@ class App {
     _newWorkout(e) {
 
         const validInputs = (...inputs) => {
-            console.log(inputs);
-            inputs.every(inp => console.log(Number.isFinite(inp)))}
+            inputs.every(inp => Number.isFinite(inp))
+        }
         const allPositives = (...inputs) => inputs.every(inp => inp > 0);
 
         e.preventDefault();
@@ -204,7 +207,7 @@ class App {
             lng
         } = this.#mapEvent.latlng;
 
-       
+
 
         const cadence = parseFloat(inputCadence.value);
         const distance = parseFloat(inputDistance.value);
@@ -223,8 +226,8 @@ class App {
             )
                 return alert('Inputs have to be positive numbers!');
 
-            workout = new Running([lat, lng], distance, duration, cadence,type);
-           
+            workout = new Running([lat, lng], distance, duration, cadence, type);
+
         }
 
         if (type === 'cycling') {
@@ -243,7 +246,7 @@ class App {
 
         //Add new workout object to workouts array
         this.#workouts.push(workout);
-        
+
 
         //RenderWorkout on list
         this._renderWorkoutMarker(workout);
@@ -265,9 +268,9 @@ class App {
 
 
     _renderWorkoutMarker(workout) {
-        
-        const renderName = (workout.type)[0].toUpperCase()+workout.type.slice(1);
-        
+
+        const renderName = (workout.type)[0].toUpperCase() + workout.type.slice(1);
+
         L.marker(workout.coords).addTo(this.#map).bindPopup(L.popup({
             maxwidth: 250,
             minwidth: 100,
@@ -282,8 +285,8 @@ class App {
 
     _renderWorkout(workout) {
 
+        list.innerHTML = '';
 
-        console.log(workout);
 
 
         let html = `<li class="workout workout--${workout.type}" data-id="${workout.id}">
@@ -298,7 +301,7 @@ class App {
             <span class="workout__value">${workout.duration}</span>
             <span class="workout__unit">min</span>
           </div>`;
-                                       
+
         if (workout.type == 'running') {
             html = html + `<div class="workout__details">
             <span class="workout__icon">⚡️</span>
@@ -333,11 +336,14 @@ class App {
 
 
     _moveToPopup(e) {
+
+        if (!this.#map) return;
+
         const workoutEl = e.target.closest('.workout');
 
 
         if (!workoutEl) return;
-    
+
         const workout = this.#workouts.find(work => work.id === workoutEl.dataset.id);
 
         this.#map.setView(workout.coords, this.#mapZoomLevel, {
@@ -346,6 +352,7 @@ class App {
                 duration: 2,
             }
         })
+
     }
 
 
@@ -354,17 +361,30 @@ class App {
     };
 
     _getLocalStorage() {
-        const data = localStorage.getItem('workouts');
+        const data = JSON.parse(localStorage.getItem('workouts'));
+        if (data) {
+            this.#workouts = data;
+        } else {
+            return;
+        }
+
+        this.#workouts.forEach(work => {
+            this._renderWorkout(work);
+        });
     }
 
-    reset() {
+    _reset(e) {
+        e.preventDefault();
+        alert("This action can't be reversed. You will lose your saved workouts. Are you sure you want to proceed?");
         localStorage.removeItem('workouts');
         location.reload();
     }
 
-
-
 }
+
+
+
+
 
 
 /*Note Point: Constructor method is created as soon as the class loads. Class loads as soon as scripts load */
